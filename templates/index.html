@@ -3,161 +3,194 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>산악 구조 드론 탐지 기록</title>
+    <title>드론 구조 관제</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script defer src="{{ url_for('static', filename='app.js') }}"></script>
 </head>
 <body>
     <header class="topbar">
-        <div>
-            <p class="eyebrow">MOUNTAIN RESCUE SYSTEM</p>
-            <h1>드론 탐지 기록 대시보드</h1>
-            <p class="subtitle">사람 탐지 위치와 신뢰도를 기록하고 확인합니다.</p>
-        </div>
-        <div class="server-badge">
-            <span class="status-dot"></span>
-            Flask API
+        <h1>드론 구조 관제</h1>
+        <div class="badge-group">
+            <span class="badge" id="live-badge">
+                <span class="dot dot-off" id="live-dot"></span><span id="live-text">OFFLINE</span>
+            </span>
+            <span class="badge" id="server-badge">
+                <span class="dot dot-off" id="server-dot"></span><span id="server-text">SERVER</span>
+            </span>
         </div>
     </header>
 
-    <main class="container">
-        <section class="summary-grid">
-            <article class="summary-card">
-                <span>전체 탐지</span>
-                <strong id="total-count">0</strong>
-            </article>
-            <article class="summary-card">
-                <span>미확인</span>
-                <strong id="unverified-count">0</strong>
-            </article>
-            <article class="summary-card">
-                <span>실제 사람</span>
-                <strong id="confirmed-count">0</strong>
-            </article>
-            <article class="summary-card">
-                <span>오탐</span>
-                <strong id="false-positive-count">0</strong>
-            </article>
-        </section>
-
-        <div class="tab-bar" role="tablist">
-            <button class="tab-button active" type="button" data-tab="live">실시간 감지</button>
-            <button class="tab-button" type="button" data-tab="search">탐지 기록 검색</button>
-            <button class="tab-button" type="button" data-tab="register">탐지 기록 등록</button>
+    <section class="summary-bar">
+        <div class="summary-item summary-primary">
+            <span class="s-label">현재 탐지</span>
+            <strong id="current-count">0명</strong>
         </div>
+        <div class="summary-item">
+            <span class="s-label">전체</span>
+            <strong id="total-count">0</strong>
+        </div>
+        <div class="summary-item status-unverified">
+            <span class="s-label">미확인</span>
+            <strong id="unverified-count">0</strong>
+        </div>
+        <div class="summary-item status-confirmed">
+            <span class="s-label">확인</span>
+            <strong id="confirmed-count">0</strong>
+        </div>
+        <div class="summary-item status-false">
+            <span class="s-label">오탐</span>
+            <strong id="false-positive-count">0</strong>
+        </div>
+    </section>
 
-        <section class="panel tab-panel" data-tab-panel="live">
-            <div class="panel-heading">
-                <div>
-                    <p class="section-label">LIVE FEED</p>
-                    <h2>실시간 감지</h2>
+    <nav class="tab-bar" role="tablist">
+        <button class="tab-button active" type="button" data-tab="live">실시간 관제</button>
+        <button class="tab-button" type="button" data-tab="history">탐지 이력</button>
+    </nav>
+
+    <main class="container">
+        <section class="tab-panel" data-tab-panel="live">
+            <div class="live-grid">
+                <div class="panel">
+                    <h2>현재 추적 객체</h2>
+                    <div id="current-tracks" class="track-list">
+                        <p class="empty-row">현재 탐지 없음</p>
+                    </div>
                 </div>
-                <div class="connection-badge" id="connection-badge">
-                    <span class="status-dot dot-off"></span>
-                    <span id="connection-label">연결 안 함</span>
+
+                <div class="panel">
+                    <h2>시스템 상태</h2>
+                    <dl class="status-list">
+                        <div>
+                            <dt>SSE</dt>
+                            <dd id="status-sse">연결 안 함</dd>
+                        </div>
+                        <div>
+                            <dt>Flask API</dt>
+                            <dd id="status-api">확인 중</dd>
+                        </div>
+                        <div>
+                            <dt>최근 수신</dt>
+                            <dd id="status-last">-</dd>
+                        </div>
+                        <div>
+                            <dt>GPS</dt>
+                            <dd class="muted">GPS 미연동</dd>
+                        </div>
+                    </dl>
+                    <button id="manual-toggle" class="link-button" type="button">+ 수동 등록</button>
                 </div>
             </div>
 
-            <div id="live-feed" class="detection-list">
-                <p class="empty-message">실시간으로 들어오는 탐지 기록이 여기에 표시됩니다.</p>
+            <div class="panel" id="manual-panel" hidden>
+                <h2>탐지 기록 수동 등록</h2>
+                <form id="detection-form" class="detection-form-compact">
+                    <label>
+                        탐지 시각
+                        <input id="detected-at" type="datetime-local" required>
+                    </label>
+                    <label>
+                        위도
+                        <input id="latitude" type="number" step="any" min="-90" max="90" placeholder="37.2991" required>
+                    </label>
+                    <label>
+                        경도
+                        <input id="longitude" type="number" step="any" min="-180" max="180" placeholder="127.0342" required>
+                    </label>
+                    <label>
+                        고도(m)
+                        <input id="altitude" type="number" step="0.1" placeholder="85.4" required>
+                    </label>
+                    <label>
+                        탐지 인원
+                        <input id="person-count" type="number" min="1" value="1" required>
+                    </label>
+                    <label>
+                        신뢰도
+                        <input id="confidence" type="number" step="0.01" min="0" max="1" placeholder="0.87" required>
+                    </label>
+                    <button type="submit" class="primary-button">저장</button>
+                </form>
+                <p id="form-message" class="message" aria-live="polite"></p>
+            </div>
+
+            <div class="panel">
+                <h2>최근 탐지 이벤트</h2>
+                <div class="table-wrap">
+                    <table class="data-table" id="recent-table">
+                        <thead>
+                            <tr>
+                                <th>시간</th>
+                                <th>인원</th>
+                                <th>Track ID</th>
+                                <th>신뢰도</th>
+                                <th>거리</th>
+                                <th>상태</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recent-table-body">
+                            <tr><td colspan="6" class="empty-row">탐지 기록이 없습니다.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </section>
 
-        <section class="panel tab-panel" data-tab-panel="search" hidden>
-            <div class="panel-heading">
-                <div>
-                    <p class="section-label">DETECTION LOG</p>
-                    <h2>최근 탐지 기록</h2>
+        <section class="tab-panel" data-tab-panel="history" hidden>
+            <div class="panel">
+                <div class="panel-heading-compact">
+                    <h2>탐지 이력</h2>
+                    <button id="refresh-button" class="secondary-button" type="button">새로고침</button>
                 </div>
-                <button id="refresh-button" class="secondary-button" type="button">
-                    새로고침
-                </button>
-            </div>
 
-            <div class="filter-bar">
-                <label class="filter-search">
-                    검색
-                    <input id="search-input" type="text" placeholder="탐지 ID로 검색">
-                </label>
-
-                <label>
-                    상태
-                    <select id="status-filter">
-                        <option value="">전체</option>
-                        <option value="unverified">미확인</option>
-                        <option value="checking">확인 중</option>
-                        <option value="confirmed">실제 사람</option>
-                        <option value="false_positive">오탐</option>
-                        <option value="resolved">구조 완료</option>
-                    </select>
-                </label>
-
-                <label>
-                    날짜
-                    <input id="date-filter" type="date">
-                </label>
-
-                <label>
-                    시각
-                    <input id="time-filter" type="text" inputmode="numeric"
-                           placeholder="HH:MM 또는 HH:MM:SS" maxlength="8">
-                </label>
-            </div>
-
-            <div id="detection-list" class="detection-list">
-                <p class="empty-message">탐지 기록을 불러오는 중입니다.</p>
-            </div>
-        </section>
-
-        <section class="panel tab-panel" data-tab-panel="register" hidden>
-            <div class="panel-heading">
-                <div>
-                    <p class="section-label">NEW DETECTION</p>
-                    <h2>탐지 기록 등록</h2>
+                <div class="filter-bar">
+                    <label class="filter-search">
+                        검색
+                        <input id="search-input" type="text" placeholder="탐지 ID로 검색">
+                    </label>
+                    <label>
+                        상태
+                        <select id="status-filter">
+                            <option value="">전체</option>
+                            <option value="unverified">미확인</option>
+                            <option value="checking">확인 중</option>
+                            <option value="confirmed">확인</option>
+                            <option value="false_positive">오탐</option>
+                            <option value="resolved">구조 완료</option>
+                        </select>
+                    </label>
+                    <label>
+                        날짜
+                        <input id="date-filter" type="date">
+                    </label>
+                    <label>
+                        시각
+                        <input id="time-filter" type="text" inputmode="numeric" placeholder="HH:MM:SS" maxlength="8">
+                    </label>
                 </div>
-                <p>현재는 사람이 입력하고, 나중에는 ROS2가 같은 API로 전송합니다.</p>
+
+                <div class="table-wrap table-wrap-scroll">
+                    <table class="data-table" id="history-table">
+                        <thead>
+                            <tr>
+                                <th>시간</th>
+                                <th>탐지 ID</th>
+                                <th>인원</th>
+                                <th>Track ID</th>
+                                <th>신뢰도</th>
+                                <th>거리</th>
+                                <th class="hide-narrow">위치</th>
+                                <th>상태</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table-body">
+                            <tr><td colspan="9" class="empty-row">탐지 기록을 불러오는 중입니다.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-
-            <form id="detection-form" class="detection-form">
-                <label>
-                    탐지 시각
-                    <input id="detected-at" type="datetime-local" required>
-                </label>
-
-                <label>
-                    위도
-                    <input id="latitude" type="number" step="any" min="-90" max="90"
-                           placeholder="37.2991" required>
-                </label>
-
-                <label>
-                    경도
-                    <input id="longitude" type="number" step="any" min="-180" max="180"
-                           placeholder="127.0342" required>
-                </label>
-
-                <label>
-                    고도(m)
-                    <input id="altitude" type="number" step="0.1"
-                           placeholder="85.4" required>
-                </label>
-
-                <label>
-                    탐지 인원
-                    <input id="person-count" type="number" min="1" value="1" required>
-                </label>
-
-                <label>
-                    신뢰도
-                    <input id="confidence" type="number" step="0.01" min="0" max="1"
-                           placeholder="0.87" required>
-                </label>
-
-                <button type="submit" class="primary-button">탐지 기록 저장</button>
-            </form>
-
-            <p id="form-message" class="message" aria-live="polite"></p>
         </section>
     </main>
 </body>
